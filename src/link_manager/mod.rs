@@ -1,5 +1,7 @@
 use std::{
-    fs, io::Write, path::{Path, PathBuf}
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
 };
 
 use symlink::symlink_dir;
@@ -43,7 +45,7 @@ impl LinkManager {
         self.move_and_link(pj_in_mods, to).unwrap();
 
         //Editor
-        let pj_in_editor =  self.bg3_data_path.join(EDITOR_PATH).join(project_name);
+        let pj_in_editor = self.bg3_data_path.join(EDITOR_PATH).join(project_name);
         let to = self.git_root_path.join(EDITOR_PATH).join(project_name);
         self.move_and_link(pj_in_editor, to).unwrap();
 
@@ -57,8 +59,8 @@ impl LinkManager {
         };
 
         if from.is_dir() && !from.is_symlink() {
-            println!("{}", from.display());
-            println!("{}", move_to.display());
+            // println!("{}", from.display());
+            // println!("{}", move_to.display());
             fs_extra::dir::move_dir(&from, &move_to, &fs_extra::dir::CopyOptions::new()).unwrap();
             symlink_dir(&to, &from).unwrap();
         } else if !from.exists() && !from.is_symlink() {
