@@ -1,0 +1,46 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'bg3_mod_git_manager'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=bg3_mod_git_manager",
+                    "--package=bg3_mod_git_manager"
+                ],
+                "filter": {
+                    "name": "bg3_mod_git_manager",
+                    "kind": "bin"
+                }
+            },
+            "args": ["TestGitTrack_afd99139-54b1-ac13-4160-c6cc43f83668","--bg3-data-root", "H:\\SteamLibrary\\steamapps\\common\\Baldurs Gate 3\\Data", 
+                     "--git-root", "D:\\games\\pc\\bg3\\modding\\TestGitTrack"   ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'bg3_mod_git_manager'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=bg3_mod_git_manager",
+                    "--package=bg3_mod_git_manager"
+                ],
+                "filter": {
+                    "name": "bg3_mod_git_manager",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
