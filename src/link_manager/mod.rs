@@ -115,11 +115,16 @@ impl LinkManager {
         let ignore_path = self.git_root_path.join(".gitignore");
         let mut ignore_file = fs::File::create(ignore_path).unwrap();
         ignore_file.write_all(ignore_str.as_bytes()).unwrap();
+
+        let lfs_str = "*.lsf filter=lfs diff=lfs merge=lfs -text
+";
+        let lfs_path = self.git_root_path.join(".gitattributes");
+        let mut lfs_file = fs::File::create(lfs_path).unwrap();
+        lfs_file.write_all(lfs_str.as_bytes()).unwrap();
     }
 
     pub fn import_back(&mut self) -> Result<(), String> {
-        let proj_path = self.git_root_path
-        .join(PROJETS_PATH);
+        let proj_path = self.git_root_path.join(PROJETS_PATH);
 
         for entry in fs::read_dir(proj_path).unwrap() {
             let ent = entry.unwrap();
@@ -127,7 +132,6 @@ impl LinkManager {
         }
 
         // println!("{:?}", self);
-
 
         if !self.bg3_data_path.exists() {
             let mut s = String::from(self.bg3_data_path.to_str().unwrap());
@@ -148,7 +152,7 @@ impl LinkManager {
             .git_root_path
             .join(PUBLIC_PATH)
             .join(&self.project_name);
-        self.move_and_link(to, from).unwrap();
+        self.create_link(from, to).unwrap();
 
         //Projects
         let to = self
@@ -159,12 +163,12 @@ impl LinkManager {
             .git_root_path
             .join(PROJETS_PATH)
             .join(&self.project_name);
-        self.move_and_link(to, from).unwrap();
+        self.create_link(from, to).unwrap();
 
         //Mods
         let to = self.bg3_data_path.join(MODS_PATH).join(&self.project_name);
         let from = self.git_root_path.join(MODS_PATH).join(&self.project_name);
-        self.move_and_link(to, from).unwrap();
+        self.create_link(from, to).unwrap();
 
         //Editor
         let to = self
@@ -175,7 +179,7 @@ impl LinkManager {
             .git_root_path
             .join(EDITOR_PATH)
             .join(&self.project_name);
-        self.move_and_link(to, from).unwrap();
+        self.create_link(from, to).unwrap();
 
         Ok(())
     }
