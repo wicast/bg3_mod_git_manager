@@ -42,5 +42,10 @@ fn main() -> iced::Result {
     //     lk.import_back().unwrap();
     // }
 
-    iced::run("Manage BG3 Mod Project With Git", LinkManager::update, LinkManager::view)
+    iced::application(
+        "Manage BG3 Mod Project With Git",
+        LinkManager::update,
+        LinkManager::view,
+    )
+    .run()
 }
