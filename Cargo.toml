@@ -2,9 +2,12 @@
 name = "bg3_mod_git_manager"
 version = "0.1.0"
 edition = "2021"
+description = "Let you manage your mod project with git"
 
 [dependencies]
 argh = "0.1.12"
 symlink = "0.1.0"
 fs_extra = "1.3.0"
 directories = "5.0.1"
+rfd = "0.15.0"
+iced = "0.13.1"

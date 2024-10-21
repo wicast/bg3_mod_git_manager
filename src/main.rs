@@ -1,15 +1,16 @@
 pub mod link_manager;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use link_manager::LinkManager;
 
 use argh::FromArgs;
+use rfd::FileDialog;
 
-#[derive(FromArgs)]
+#[derive(FromArgs, Default)]
 /// CLI Args
 struct Args {
     ///project name
-    #[argh(option, short='n')]
+    #[argh(option, short = 'n')]
     project_name: Option<String>,
 
     ///the BG3 Data Path
@@ -25,18 +26,21 @@ struct Args {
     is_import: bool,
 }
 
-fn main() {
-    let args: Args = argh::from_env();
-    let mut lk = LinkManager {
-        project_name: args.project_name.unwrap_or_default(),
-        bg3_data_path: PathBuf::from(&args.bg3_data_root),
-        git_root_path: PathBuf::from(&args.git_root),
-    };
+fn main() -> iced::Result {
+    // let args: Args = Args::default();
 
-    if !args.is_import {
-        lk.create_symbol_link_for().unwrap();
-        lk.create_gitignore();
-    } else {
-        lk.import_back().unwrap();
-    }
+    // let mut lk = LinkManager::new(
+    //     &args.project_name.unwrap_or_default(),
+    //     FileDialog::new().pick_folder().unwrap().to_str().unwrap(),
+    //     FileDialog::new().pick_folder().unwrap().to_str().unwrap(),
+    // );
+
+    // if !args.is_import {
+    //     lk.create_symbol_link_for().unwrap();
+    //     lk.create_gitignore();
+    // } else {
+    //     lk.import_back().unwrap();
+    // }
+
+    iced::run("Manage BG3 Mod Project With Git", LinkManager::update, LinkManager::view)
 }
