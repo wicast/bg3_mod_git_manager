@@ -27,7 +27,7 @@ pub struct LinkManager {
 }
 
 impl LinkManager {
-    ///GUI
+    /// GUI
     pub fn update(&mut self, message: Message) {
         match message {
             Message::ProjectNameInputChanged(name) => {
@@ -56,7 +56,7 @@ impl LinkManager {
         // Elements
         let project_name_text = text("Project Name:");
         let project_name_input =
-            text_input("", &self.project_name).on_input(Message::ProjectNameInputChanged);
+            text_input("Optional For Import", &self.project_name).on_input(Message::ProjectNameInputChanged);
 
         let bg3_data_path_text = text("BG3 Data Path:");
         let bg3_data_path_input = text_input(
