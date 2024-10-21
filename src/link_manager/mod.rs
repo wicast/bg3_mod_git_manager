@@ -1,13 +1,11 @@
 use std::{fs, io::Write, path::PathBuf};
 
-use iced::{
-    widget::{button, column, row, text, text_input, Column},
-    Element, Font,
-};
+use iced::widget::{button, column, row, text, text_input, Column};
+use rfd::FileDialog;
 use symlink::symlink_dir;
 
 const PUBLIC_PATH: &str = "Public";
-const PROJETS_PATH: &str = "Projects";
+const PROJECTS_PATH: &str = "Projects";
 const MODS_PATH: &str = "Mods";
 const EDITOR_PATH: &str = "Editor/Mods";
 
@@ -16,16 +14,9 @@ pub enum Message {
     ProjectNameInputChanged(String),
     SelectBG3,
     SelectGit,
-}
 
-fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
-    const ICON_FONT: Font = Font::with_name("editor-icons");
-
-    text(codepoint).font(ICON_FONT).into()
-}
-
-fn open_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0f115}')
+    ExportAndLink,
+    ImportBack,
 }
 
 #[derive(Debug, Default)]
@@ -37,30 +28,56 @@ pub struct LinkManager {
 
 impl LinkManager {
     ///GUI
-    pub fn update(&mut self, message: Message) {}
+    pub fn update(&mut self, message: Message) {
+        match message {
+            Message::ProjectNameInputChanged(name) => {
+                self.project_name = name;
+            }
+            Message::SelectBG3 => {
+                let bg3_folder = FileDialog::new().pick_folder().unwrap_or_default();
+                //TODO check bg3 data path
+                self.bg3_data_path = bg3_folder;
+            }
+            Message::SelectGit => {
+                let git_folder = FileDialog::new().pick_folder().unwrap_or_default();
+                self.git_root_path = git_folder;
+            }
+            Message::ExportAndLink => {
+                self.export_and_create_symbol_link().unwrap();
+                self.create_gitignore();
+            }
+            Message::ImportBack => {
+                self.import_back().unwrap();
+            }
+        }
+    }
 
     pub fn view(&self) -> Column<Message> {
+        // Elements
         let project_name_text = text("Project Name:");
-        let project_name_input = text_input("", &self.project_name);
+        let project_name_input =
+            text_input("", &self.project_name).on_input(Message::ProjectNameInputChanged);
 
         let bg3_data_path_text = text("BG3 Data Path:");
         let bg3_data_path_input = text_input(
             "",
             self.bg3_data_path.as_os_str().to_str().unwrap_or_default(),
         );
-        let select_bg3_data = button("Select Folder");
+        let select_bg3_data = button("Select Folder").on_press(Message::SelectBG3);
 
         let git_root_path_text = text("Target Git Path:");
         let git_root_path_input = text_input(
             "",
             self.git_root_path.as_os_str().to_str().unwrap_or_default(),
         );
-        let select_git_root = button("Select Folder");
+        let select_git_root = button("Select Folder").on_press(Message::SelectGit);
 
-        let export_to_git = button("Export To Git");
+        let export_to_git = button("Export To Git").on_press(Message::ExportAndLink);
 
-        let import_back_to_bg3 = button("Import Project To BG3 Data Folder");
+        let import_back_to_bg3 =
+            button("Import Project To BG3 Data Folder").on_press(Message::ImportBack);
 
+        // Layout
         let project_name = row![project_name_text, project_name_input].spacing(5);
         let bg3_data = row![bg3_data_path_text, bg3_data_path_input, select_bg3_data].spacing(5);
         let git_root = row![git_root_path_text, git_root_path_input, select_git_root].spacing(5);
@@ -84,7 +101,7 @@ impl LinkManager {
         }
     }
 
-    pub fn create_symbol_link_for(&self) -> Result<(), String> {
+    pub fn export_and_create_symbol_link(&self) -> Result<(), String> {
         //Data
         if !self.bg3_data_path.exists() {
             let mut s = String::from(self.bg3_data_path.to_str().unwrap());
@@ -110,11 +127,11 @@ impl LinkManager {
         //Projects
         let pj_in_projects = self
             .bg3_data_path
-            .join(PROJETS_PATH)
+            .join(PROJECTS_PATH)
             .join(&self.project_name);
         let to = self
             .git_root_path
-            .join(PROJETS_PATH)
+            .join(PROJECTS_PATH)
             .join(&self.project_name);
         self.move_and_link(pj_in_projects, to).unwrap();
 
@@ -213,11 +230,11 @@ impl LinkManager {
         //Projects
         let to = self
             .bg3_data_path
-            .join(PROJETS_PATH)
+            .join(PROJECTS_PATH)
             .join(&self.project_name);
         let from = self
             .git_root_path
-            .join(PROJETS_PATH)
+            .join(PROJECTS_PATH)
             .join(&self.project_name);
         self.create_link(from, to).unwrap();
 
@@ -241,7 +258,7 @@ impl LinkManager {
     }
 
     fn find_project_name(&mut self) {
-        let proj_path = self.git_root_path.join(PROJETS_PATH);
+        let proj_path = self.git_root_path.join(PROJECTS_PATH);
 
         for entry in fs::read_dir(proj_path).unwrap() {
             let ent = entry.unwrap();
