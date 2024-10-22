@@ -1,7 +1,11 @@
 use std::{fs, io::Write, path::PathBuf};
 
-use iced::{widget::{button, column, row, text, text_input, Column}, Task};
+use iced::{
+    widget::{button, checkbox, column, row, text, text_input, Column},
+    Task,
+};
 use rfd::FileDialog;
+use serde::{Deserialize, Serialize};
 use symlink::symlink_dir;
 
 const PUBLIC_PATH: &str = "Public";
@@ -19,6 +23,7 @@ pub enum Message {
     SelectGit,
 
     ExportAndLink,
+    ToggleCreateGit(bool),
     ImportBack,
 }
 
@@ -27,30 +32,36 @@ pub struct LinkManager {
     pub project_name: String,
     pub bg3_data_path: PathBuf,
     pub git_root_path: PathBuf,
+
+    create_ignore: bool,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 struct Config {
-    pub bg3_data_path: String
+    #[serde(default)]
+    pub bg3_data_path: String,
 }
 
 impl LinkManager {
     /// GUI
-    pub fn new() -> (Self, Task<Message>)  {
-        let base_dir = directories::BaseDirs::new().unwrap();
-        let config_dir = base_dir.config_dir();
-        let app_config_dir = config_dir.join(APP_CONFIG_DIR);
-        if !app_config_dir.exists() {
-            fs::create_dir_all(&app_config_dir).unwrap();
-        }
-        let config_file_path = app_config_dir.join(CONFIG_FILE);
-        if !config_file_path.exists() {
-            fs::File::create(config_file_path).unwrap();
-        }
-        let mut mgr = LinkManager::default();
-        mgr.bg3_data_path = PathBuf::from("todo");
-        (mgr , Task::none())
+    pub fn new() -> (Self, Task<Message>) {
+        let config_file_path = create_or_get_config_file();
+        let config_str = fs::read_to_string(&config_file_path).unwrap();
+        let config_str = if config_str.is_empty() {
+            "{}".to_string()
+        } else {
+            config_str
+        };
+
+        let config: Config = serde_json::from_str(&config_str).unwrap();
+
+        let mgr = LinkManager {
+            bg3_data_path: PathBuf::from(config.bg3_data_path),
+            ..Default::default()
+        };
+        (mgr, Task::none())
     }
-    
+
     pub fn update(&mut self, message: Message) {
         match message {
             Message::ProjectNameInputChanged(name) => {
@@ -60,7 +71,8 @@ impl LinkManager {
                 let bg3_folder = FileDialog::new().pick_folder().unwrap_or_default();
                 //TODO check bg3 data path
                 self.bg3_data_path = bg3_folder;
-                //TODO save config
+
+                self.save_config();
             }
             Message::SelectGit => {
                 let git_folder = FileDialog::new().pick_folder().unwrap_or_default();
@@ -68,10 +80,15 @@ impl LinkManager {
             }
             Message::ExportAndLink => {
                 self.export_and_create_symbol_link().unwrap();
-                self.create_gitignore();
+                if self.create_ignore {
+                    self.create_gitignore();
+                }
             }
             Message::ImportBack => {
                 self.import_back().unwrap();
+            }
+            Message::ToggleCreateGit(b) => {
+                self.create_ignore = b;
             }
         }
     }
@@ -79,8 +96,8 @@ impl LinkManager {
     pub fn view(&self) -> Column<Message> {
         // Elements
         let project_name_text = text("Project Name:");
-        let project_name_input =
-            text_input("Optional For Import", &self.project_name).on_input(Message::ProjectNameInputChanged);
+        let project_name_input = text_input("Optional For Import", &self.project_name)
+            .on_input(Message::ProjectNameInputChanged);
 
         let bg3_data_path_text = text("BG3 Data Path:");
         let bg3_data_path_input = text_input(
@@ -96,7 +113,10 @@ impl LinkManager {
         );
         let select_git_root = button("Select Folder").on_press(Message::SelectGit);
 
-        let export_to_git = button("Export To Git").on_press(Message::ExportAndLink);
+        let export_to_git_butt = button("Export To Git").on_press(Message::ExportAndLink);
+        let export_with_ignore =
+            checkbox("Create Ignore Files", self.create_ignore).on_toggle(Message::ToggleCreateGit);
+        let export_to_git = row![export_to_git_butt, export_with_ignore].spacing(5);
 
         let import_back_to_bg3 =
             button("Import Project To BG3 Data Folder").on_press(Message::ImportBack);
@@ -120,7 +140,7 @@ impl LinkManager {
     pub fn export_and_create_symbol_link(&self) -> Result<(), String> {
         //Data
         if !self.bg3_data_path.exists() {
-            let mut s = String::from(self.bg3_data_path.to_str().unwrap());
+            let mut s = self.bg3_data_path.to_str().unwrap().to_string();
             s.push_str(", BG3 Data Path Not found");
             return Err(s);
         }
@@ -220,10 +240,10 @@ impl LinkManager {
     }
 
     pub fn import_back(&mut self) -> Result<(), String> {
-        self.find_project_name();
+        self.find_project_name().unwrap();
 
         if !self.bg3_data_path.exists() {
-            let mut s = String::from(self.bg3_data_path.to_str().unwrap());
+            let mut s = self.bg3_data_path.to_str().unwrap().to_string();
             s.push_str(", BG3 Data Path Not found");
             return Err(s);
         }
@@ -273,12 +293,43 @@ impl LinkManager {
         Ok(())
     }
 
-    fn find_project_name(&mut self) {
+    fn save_config(&self) {
+        let config_file_path = create_or_get_config_file();
+        let config = Config {
+            bg3_data_path: self
+                .bg3_data_path
+                .as_os_str()
+                .to_string_lossy()
+                .into_owned(),
+        };
+        let config_str = serde_json::to_string(&config).unwrap();
+        fs::write(config_file_path, config_str).unwrap();
+    }
+
+    fn find_project_name(&mut self) -> Result<(), String> {
         let proj_path = self.git_root_path.join(PROJECTS_PATH);
 
         for entry in fs::read_dir(proj_path).unwrap() {
             let ent = entry.unwrap();
             self.project_name = ent.file_name().into_string().unwrap();
         }
+        if self.project_name.is_empty() {
+            return Err("No Project Name Found".to_string());
+        }
+        Ok(())
     }
+}
+
+fn create_or_get_config_file() -> PathBuf {
+    let base_dir = directories::BaseDirs::new().unwrap();
+    let config_dir = base_dir.config_dir();
+    let app_config_dir = config_dir.join(APP_CONFIG_DIR);
+    if !app_config_dir.exists() {
+        fs::create_dir_all(&app_config_dir).unwrap();
+    }
+    let config_file_path = app_config_dir.join(CONFIG_FILE);
+    if !config_file_path.exists() {
+        fs::File::create(&config_file_path).unwrap();
+    }
+    config_file_path
 }
