@@ -73,16 +73,17 @@ impl LinkManager {
                 self.project_name = name;
             }
             Message::SelectBG3 => {
-                let bg3_folder = FileDialog::new().pick_folder().unwrap_or_default();
-
-                Self::check_bg3_data_path(&bg3_folder).unwrap();
-                self.bg3_data_path = bg3_folder;
-                self.save_config();
+                if let Some(bg3_folder) = FileDialog::new().pick_folder() {
+                    Self::check_bg3_data_path(&bg3_folder).unwrap();
+                    self.bg3_data_path = bg3_folder;
+                    self.save_config();
+                }
             }
             Message::SelectGit => {
-                let git_folder = FileDialog::new().pick_folder().unwrap_or_default();
-                self.git_root_path = git_folder;
-                self.find_project_name().unwrap_or_default();
+                if let Some(git_folder) = FileDialog::new().pick_folder() {
+                    self.git_root_path = git_folder;
+                    self.find_project_name().unwrap_or_default();
+                }
             }
             Message::ExportAndLink => {
                 self.export_and_create_soft_link().unwrap();
