@@ -61,6 +61,7 @@ impl LinkManager {
 
         let mgr = LinkManager {
             bg3_data_path: PathBuf::from(config.bg3_data_path),
+            create_ignore: true,
             ..Default::default()
         };
         (mgr, Task::none())
@@ -197,8 +198,6 @@ impl LinkManager {
         };
 
         if from.is_dir() && !from.is_symlink() {
-            // println!("{}", from.display());
-            // println!("{}", move_to.display());
             fs_extra::dir::move_dir(&from, &move_to, &fs_extra::dir::CopyOptions::new()).unwrap();
             symlink_dir(&to, &from).unwrap();
         } else if !from.exists() && !from.is_symlink() {
