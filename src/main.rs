@@ -47,5 +47,5 @@ fn main() -> iced::Result {
         LinkManager::update,
         LinkManager::view,
     )
-    .run()
+    .run_with(LinkManager::new)
 }

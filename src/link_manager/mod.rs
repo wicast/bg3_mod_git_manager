@@ -1,6 +1,6 @@
 use std::{fs, io::Write, path::PathBuf};
 
-use iced::widget::{button, column, row, text, text_input, Column};
+use iced::{widget::{button, column, row, text, text_input, Column}, Task};
 use rfd::FileDialog;
 use symlink::symlink_dir;
 
@@ -8,6 +8,9 @@ const PUBLIC_PATH: &str = "Public";
 const PROJECTS_PATH: &str = "Projects";
 const MODS_PATH: &str = "Mods";
 const EDITOR_PATH: &str = "Editor/Mods";
+
+const APP_CONFIG_DIR: &str = "BG3ModGitManager";
+const CONFIG_FILE: &str = "Config.json";
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -26,8 +29,25 @@ pub struct LinkManager {
     pub git_root_path: PathBuf,
 }
 
+struct Config {
+    pub bg3_data_path: String
+}
+
 impl LinkManager {
     /// GUI
+    pub fn new() -> (Self, Task<Message>)  {
+        let base_dir = directories::BaseDirs::new().unwrap();
+        let config_dir = base_dir.config_dir();
+        let app_config_dir = config_dir.join(APP_CONFIG_DIR);
+        if !app_config_dir.exists() {
+            fs::create_dir_all(&app_config_dir).unwrap();
+        }
+        let coinfig_file_path = app_config_dir.join(CONFIG_FILE);
+        let mut mgr = LinkManager::default();
+        mgr.bg3_data_path = PathBuf::from("todo");
+        (mgr , Task::none())
+    }
+    
     pub fn update(&mut self, message: Message) {
         match message {
             Message::ProjectNameInputChanged(name) => {
@@ -37,6 +57,7 @@ impl LinkManager {
                 let bg3_folder = FileDialog::new().pick_folder().unwrap_or_default();
                 //TODO check bg3 data path
                 self.bg3_data_path = bg3_folder;
+                //TODO save config
             }
             Message::SelectGit => {
                 let git_folder = FileDialog::new().pick_folder().unwrap_or_default();
@@ -91,14 +112,6 @@ impl LinkManager {
         ]
         .padding(20)
         .spacing(5)
-    }
-
-    pub fn new(project_name: &str, bg3_data_path: &str, git_root_path: &str) -> Self {
-        Self {
-            project_name: String::from(project_name),
-            bg3_data_path: PathBuf::from(bg3_data_path),
-            git_root_path: PathBuf::from(git_root_path),
-        }
     }
 
     pub fn export_and_create_symbol_link(&self) -> Result<(), String> {
