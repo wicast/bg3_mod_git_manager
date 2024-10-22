@@ -8,5 +8,6 @@ fn main() -> iced::Result {
         LinkManager::update,
         LinkManager::view,
     )
+    .window_size((500.0, 500.0))
     .run_with(LinkManager::new)
 }
