@@ -82,9 +82,10 @@ impl LinkManager {
             Message::SelectGit => {
                 let git_folder = FileDialog::new().pick_folder().unwrap_or_default();
                 self.git_root_path = git_folder;
+                self.find_project_name().unwrap_or_default();
             }
             Message::ExportAndLink => {
-                self.export_and_create_symbol_link().unwrap();
+                self.export_and_create_soft_link().unwrap();
                 if self.create_ignore {
                     self.create_gitignore();
                 }
@@ -142,7 +143,8 @@ impl LinkManager {
         .spacing(5)
     }
 
-    pub fn export_and_create_symbol_link(&self) -> Result<(), String> {
+    /// Manage soft link
+    pub fn export_and_create_soft_link(&self) -> Result<(), String> {
         //Data
         Self::check_bg3_data_path(&self.bg3_data_path).unwrap();
 
@@ -301,8 +303,9 @@ impl LinkManager {
     fn find_project_name(&mut self) -> Result<(), String> {
         let proj_path = self.git_root_path.join(PROJECTS_PATH);
 
-        for entry in fs::read_dir(proj_path).unwrap() {
-            let ent = entry.unwrap();
+        let read_dir_iter = fs::read_dir(proj_path).map_err(|e| e.to_string())?;
+        for entry in read_dir_iter {
+            let ent: fs::DirEntry = entry.map_err(|e| e.to_string())?;
             self.project_name = ent.file_name().into_string().unwrap();
         }
         if self.project_name.is_empty() {
