@@ -1,4 +1,8 @@
-use std::{fs, io::Write, path::PathBuf};
+use std::{
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use iced::{
     widget::{button, checkbox, column, row, text, text_input, Column},
@@ -69,9 +73,9 @@ impl LinkManager {
             }
             Message::SelectBG3 => {
                 let bg3_folder = FileDialog::new().pick_folder().unwrap_or_default();
-                //TODO check bg3 data path
-                self.bg3_data_path = bg3_folder;
 
+                Self::check_bg3_data_path(&bg3_folder).unwrap();
+                self.bg3_data_path = bg3_folder;
                 self.save_config();
             }
             Message::SelectGit => {
@@ -96,7 +100,7 @@ impl LinkManager {
     pub fn view(&self) -> Column<Message> {
         // Elements
         let project_name_text = text("Project Name:");
-        let project_name_input = text_input("Optional For Import", &self.project_name)
+        let project_name_input = text_input("Optional For Importing", &self.project_name)
             .on_input(Message::ProjectNameInputChanged);
 
         let bg3_data_path_text = text("BG3 Data Path:");
@@ -139,11 +143,7 @@ impl LinkManager {
 
     pub fn export_and_create_symbol_link(&self) -> Result<(), String> {
         //Data
-        if !self.bg3_data_path.exists() {
-            let mut s = self.bg3_data_path.to_str().unwrap().to_string();
-            s.push_str(", BG3 Data Path Not found");
-            return Err(s);
-        }
+        Self::check_bg3_data_path(&self.bg3_data_path).unwrap();
 
         let pj_in_data: PathBuf = self.bg3_data_path.join(&self.project_name);
         let to = self.git_root_path.join(&self.project_name);
@@ -217,8 +217,6 @@ impl LinkManager {
         }
 
         if to.exists() {
-            // let err_s = format!("importing failed {} already exists", to.display());
-            // return Err(err_s);
             std::fs::remove_file(&to).unwrap();
             println!("importing {} already exists, overwrite it", to.display());
         }
@@ -241,12 +239,7 @@ impl LinkManager {
 
     pub fn import_back(&mut self) -> Result<(), String> {
         self.find_project_name().unwrap();
-
-        if !self.bg3_data_path.exists() {
-            let mut s = self.bg3_data_path.to_str().unwrap().to_string();
-            s.push_str(", BG3 Data Path Not found");
-            return Err(s);
-        }
+        Self::check_bg3_data_path(&self.bg3_data_path).unwrap();
 
         let to: PathBuf = self.bg3_data_path.join(&self.project_name);
         let from = self.git_root_path.join(&self.project_name);
@@ -315,6 +308,16 @@ impl LinkManager {
         }
         if self.project_name.is_empty() {
             return Err("No Project Name Found".to_string());
+        }
+        Ok(())
+    }
+
+    fn check_bg3_data_path(path: &Path) -> Result<(), String> {
+        let assets = path.join("Assets.pak");
+        let gustav = path.join("Gustav.pak");
+        let dice_set01 = path.join("DiceSet01.pak");
+        if !gustav.exists() || !assets.exists() || !dice_set01.exists() {
+            return Err("Not A Valid BG3 Data Path".to_string());
         }
         Ok(())
     }
