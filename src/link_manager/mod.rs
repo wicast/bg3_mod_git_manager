@@ -42,7 +42,10 @@ impl LinkManager {
         if !app_config_dir.exists() {
             fs::create_dir_all(&app_config_dir).unwrap();
         }
-        let coinfig_file_path = app_config_dir.join(CONFIG_FILE);
+        let config_file_path = app_config_dir.join(CONFIG_FILE);
+        if !config_file_path.exists() {
+            fs::File::create(config_file_path).unwrap();
+        }
         let mut mgr = LinkManager::default();
         mgr.bg3_data_path = PathBuf::from("todo");
         (mgr , Task::none())
