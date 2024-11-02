@@ -5,8 +5,13 @@ use std::{
 };
 
 use iced::{
-    widget::{button, checkbox, column, row, text, text_input, Column},
-    Task,
+    advanced::Widget,
+    alignment, border,
+    widget::{
+        button, center, checkbox, column, container, mouse_area, opaque, row, scrollable, stack,
+        text, text_input,
+    },
+    Color, Element, Length, Task, Theme,
 };
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
@@ -29,6 +34,8 @@ pub enum Message {
     ExportAndLink,
     ToggleCreateGit(bool),
     ImportBack,
+
+    HideErr,
 }
 
 #[derive(Debug, Default)]
@@ -38,6 +45,8 @@ pub struct LinkManager {
     pub git_root_path: PathBuf,
 
     create_ignore: bool,
+
+    err_msg: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -62,6 +71,8 @@ impl LinkManager {
         let mgr = LinkManager {
             bg3_data_path: PathBuf::from(config.bg3_data_path),
             create_ignore: true,
+            err_msg: "    err_msg: String,}            dafefioajeifofofofofofoiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+            .to_string(),
             ..Default::default()
         };
         (mgr, Task::none())
@@ -97,10 +108,13 @@ impl LinkManager {
             Message::ToggleCreateGit(b) => {
                 self.create_ignore = b;
             }
+            Message::HideErr => {
+                self.err_msg = "".to_string();
+            }
         }
     }
 
-    pub fn view(&self) -> Column<Message> {
+    pub fn view(&self) -> Element<Message> {
         // Elements
         let project_name_text = text("Project Name:");
         let project_name_input = text_input("Optional For Importing", &self.project_name)
@@ -133,7 +147,7 @@ impl LinkManager {
         let bg3_data = row![bg3_data_path_text, bg3_data_path_input, select_bg3_data].spacing(5);
         let git_root = row![git_root_path_text, git_root_path_input, select_git_root].spacing(5);
 
-        column![
+        let content = column![
             project_name,
             bg3_data,
             git_root,
@@ -141,7 +155,21 @@ impl LinkManager {
             import_back_to_bg3
         ]
         .padding(20)
-        .spacing(5)
+        .spacing(5);
+        if self.err_msg.is_empty() {
+            content.into()
+        } else {
+            let alert = container(
+                column![
+                    text("Error").size(20).color(Color::new(1.0, 0.0, 0.0, 1.0)),
+                    scrollable(text(&self.err_msg).width(300)).height(100),
+                    button("OK").on_press(Message::HideErr)
+                ]
+                .align_x(alignment::Horizontal::Center),
+            )
+            .style(container::rounded_box);
+            modal(content, alert, Message::HideErr)
+        }
     }
 
     /// Manage soft link
@@ -338,4 +366,33 @@ fn create_or_get_config_file() -> PathBuf {
         fs::File::create(&config_file_path).unwrap();
     }
     config_file_path
+}
+
+fn modal<'a, Message>(
+    base: impl Into<Element<'a, Message>>,
+    content: impl Into<Element<'a, Message>>,
+    on_blur: Message,
+) -> Element<'a, Message>
+where
+    Message: Clone + 'a,
+{
+    stack![
+        base.into(),
+        opaque(
+            mouse_area(center(opaque(content)).style(|_theme| {
+                container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.9,
+                            ..Color::BLACK
+                        }
+                        .into(),
+                    ),
+                    ..container::Style::default()
+                }
+            }))
+            .on_press(on_blur)
+        )
+    ]
+    .into()
 }
