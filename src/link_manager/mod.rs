@@ -12,7 +12,7 @@ use iced::{
         button, center, checkbox, column, container, mouse_area, opaque, row, scrollable, stack,
         text, text_input,
     },
-    Color, Element, Task,
+    window, Color, Element, Task,
 };
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
@@ -48,6 +48,7 @@ pub struct LinkManager {
     create_ignore: bool,
 
     err_msg: String,
+    boot_failed: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -78,14 +79,15 @@ impl LinkManager {
 
             Ok(mgr)
         };
-        let mgr = try_load_config().unwrap_or_else(|f| LinkManager {
-            err_msg: f.to_string(),
+        let mgr = try_load_config().unwrap_or_else(|e| LinkManager {
+            err_msg: e.to_string(),
+            boot_failed: true,
             ..Default::default()
         });
         (mgr, Task::none())
     }
 
-    pub fn update(&mut self, message: Message) {
+    pub fn update(&mut self, message: Message) -> Task<Message> {
         let process_msg = || {
             match message {
                 Message::ProjectNameInputChanged(name) => {
@@ -118,15 +120,21 @@ impl LinkManager {
                 }
                 Message::HideErr => {
                     self.err_msg = "".to_string();
+                    if self.boot_failed {
+                        return Ok(window::get_latest().and_then(window::close));
+                    }
                 }
             };
-            Ok(())
+            Ok(Task::none())
         };
 
         let res = process_msg();
         self.err_msg = res
+            .as_ref()
             .map(|_| "".to_string())
             .unwrap_or_else(|e| e.to_string());
+
+        res.unwrap_or(Task::none())
     }
 
     pub fn view(&self) -> Element<Message> {
