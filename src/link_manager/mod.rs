@@ -4,14 +4,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::{anyhow, bail, Ok, Result};
+
 use iced::{
-    advanced::Widget,
-    alignment, border,
+    alignment,
     widget::{
         button, center, checkbox, column, container, mouse_area, opaque, row, scrollable, stack,
         text, text_input,
     },
-    Color, Element, Length, Task, Theme,
+    Color, Element, Task,
 };
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
@@ -58,60 +59,74 @@ struct Config {
 impl LinkManager {
     /// GUI
     pub fn new() -> (Self, Task<Message>) {
-        let config_file_path = create_or_get_config_file();
-        let config_str = fs::read_to_string(&config_file_path).unwrap();
-        let config_str = if config_str.is_empty() {
-            "{}".to_string()
-        } else {
-            config_str
+        let try_load_config = || {
+            let config_file_path = create_or_get_config_file()?;
+            let config_str = fs::read_to_string(&config_file_path)?;
+            let config_str = if config_str.is_empty() {
+                "{}".to_string()
+            } else {
+                config_str
+            };
+
+            let config: Config = serde_json::from_str(&config_str)?;
+
+            let mgr = LinkManager {
+                bg3_data_path: PathBuf::from(config.bg3_data_path),
+                create_ignore: true,
+                ..Default::default()
+            };
+
+            Ok(mgr)
         };
-
-        let config: Config = serde_json::from_str(&config_str).unwrap();
-
-        let mgr = LinkManager {
-            bg3_data_path: PathBuf::from(config.bg3_data_path),
-            create_ignore: true,
-            err_msg: "    err_msg: String,}            dafefioajeifofofofofofoiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
-            .to_string(),
+        let mgr = try_load_config().unwrap_or_else(|f| LinkManager {
+            err_msg: f.to_string(),
             ..Default::default()
-        };
+        });
         (mgr, Task::none())
     }
 
     pub fn update(&mut self, message: Message) {
-        match message {
-            Message::ProjectNameInputChanged(name) => {
-                self.project_name = name;
-            }
-            Message::SelectBG3 => {
-                if let Some(bg3_folder) = FileDialog::new().pick_folder() {
-                    Self::check_bg3_data_path(&bg3_folder).unwrap();
-                    self.bg3_data_path = bg3_folder;
-                    self.save_config();
+        let process_msg = || {
+            match message {
+                Message::ProjectNameInputChanged(name) => {
+                    self.project_name = name;
                 }
-            }
-            Message::SelectGit => {
-                if let Some(git_folder) = FileDialog::new().pick_folder() {
-                    self.git_root_path = git_folder;
-                    self.find_project_name().unwrap_or_default();
+                Message::SelectBG3 => {
+                    if let Some(bg3_folder) = FileDialog::new().pick_folder() {
+                        Self::check_bg3_data_path(&bg3_folder)?;
+                        self.bg3_data_path = bg3_folder;
+                        self.save_config()?;
+                    }
                 }
-            }
-            Message::ExportAndLink => {
-                self.export_and_create_soft_link().unwrap();
-                if self.create_ignore {
-                    self.create_gitignore();
+                Message::SelectGit => {
+                    if let Some(git_folder) = FileDialog::new().pick_folder() {
+                        self.git_root_path = git_folder;
+                        self.find_project_name()?;
+                    }
                 }
-            }
-            Message::ImportBack => {
-                self.import_back().unwrap();
-            }
-            Message::ToggleCreateGit(b) => {
-                self.create_ignore = b;
-            }
-            Message::HideErr => {
-                self.err_msg = "".to_string();
-            }
-        }
+                Message::ExportAndLink => {
+                    self.export_and_create_soft_link()?;
+                    if self.create_ignore {
+                        self.create_gitignore()?;
+                    }
+                }
+                Message::ImportBack => {
+                    self.import_back()?;
+                }
+                Message::ToggleCreateGit(b) => {
+                    self.create_ignore = b;
+                }
+                Message::HideErr => {
+                    self.err_msg = "".to_string();
+                }
+            };
+            Ok(())
+        };
+
+        let res = process_msg();
+        self.err_msg = res
+            .map(|_| "".to_string())
+            .unwrap_or_else(|e| e.to_string());
     }
 
     pub fn view(&self) -> Element<Message> {
@@ -165,7 +180,8 @@ impl LinkManager {
                     scrollable(text(&self.err_msg).width(300)).height(100),
                     button("OK").on_press(Message::HideErr)
                 ]
-                .align_x(alignment::Horizontal::Center),
+                .align_x(alignment::Horizontal::Center)
+                .padding(5),
             )
             .style(container::rounded_box);
             modal(content, alert, Message::HideErr)
@@ -173,13 +189,13 @@ impl LinkManager {
     }
 
     /// Manage soft link
-    pub fn export_and_create_soft_link(&self) -> Result<(), String> {
+    pub fn export_and_create_soft_link(&self) -> Result<()> {
         //Data
-        Self::check_bg3_data_path(&self.bg3_data_path).unwrap();
+        Self::check_bg3_data_path(&self.bg3_data_path)?;
 
         let pj_in_data: PathBuf = self.bg3_data_path.join(&self.project_name);
         let to = self.git_root_path.join(&self.project_name);
-        self.move_and_link(pj_in_data, to).unwrap();
+        self.move_and_link(pj_in_data, to)?;
 
         //Public
         let pj_in_public = self
@@ -190,7 +206,7 @@ impl LinkManager {
             .git_root_path
             .join(PUBLIC_PATH)
             .join(&self.project_name);
-        self.move_and_link(pj_in_public, to).unwrap();
+        self.move_and_link(pj_in_public, to)?;
 
         //Projects
         let pj_in_projects = self
@@ -201,12 +217,12 @@ impl LinkManager {
             .git_root_path
             .join(PROJECTS_PATH)
             .join(&self.project_name);
-        self.move_and_link(pj_in_projects, to).unwrap();
+        self.move_and_link(pj_in_projects, to)?;
 
         //Mods
         let pj_in_mods = self.bg3_data_path.join(MODS_PATH).join(&self.project_name);
         let to = self.git_root_path.join(MODS_PATH).join(&self.project_name);
-        self.move_and_link(pj_in_mods, to).unwrap();
+        self.move_and_link(pj_in_mods, to)?;
 
         //Editor
         let pj_in_editor = self
@@ -217,63 +233,64 @@ impl LinkManager {
             .git_root_path
             .join(EDITOR_PATH)
             .join(&self.project_name);
-        self.move_and_link(pj_in_editor, to).unwrap();
+        self.move_and_link(pj_in_editor, to)?;
 
         Ok(())
     }
 
-    fn move_and_link(&self, from: PathBuf, to: PathBuf) -> Result<(), String> {
+    fn move_and_link(&self, from: PathBuf, to: PathBuf) -> Result<()> {
         let move_to = to.join("..");
         if !move_to.exists() {
-            fs::create_dir_all(&move_to).unwrap();
+            fs::create_dir_all(&move_to)?;
         };
 
         if from.is_dir() && !from.is_symlink() {
-            fs_extra::dir::move_dir(&from, &move_to, &fs_extra::dir::CopyOptions::new()).unwrap();
-            symlink_dir(&to, &from).unwrap();
+            fs_extra::dir::move_dir(&from, &move_to, &fs_extra::dir::CopyOptions::new())?;
+            symlink_dir(&to, &from)?;
         } else if !from.exists() && !from.is_symlink() {
-            fs::create_dir_all(&to).unwrap();
-            symlink_dir(&to, &from).unwrap();
+            fs::create_dir_all(&to)?;
+            symlink_dir(&to, &from)?;
         } else {
             println!("skip exist link {}", from.display());
         }
         Ok(())
     }
 
-    fn create_link(&self, from: PathBuf, to: PathBuf) -> Result<(), String> {
+    fn create_link(&self, from: PathBuf, to: PathBuf) -> Result<()> {
         if !from.exists() {
-            let err_s = format!("importing failed {} not exists", from.display());
-            return Err(err_s);
+            bail!("importing failed {} not exists", from.display())
         }
 
         if to.exists() {
-            std::fs::remove_file(&to).unwrap();
+            std::fs::remove_file(&to)?;
             println!("importing {} already exists, overwrite it", to.display());
         }
 
-        symlink_dir(&from, &to).unwrap();
+        symlink_dir(&from, &to)?;
         Ok(())
     }
 
-    pub fn create_gitignore(&self) {
+    pub fn create_gitignore(&self) -> Result<()> {
         let ignore_str = include_str!("../../template/.gitignore");
         let ignore_path = self.git_root_path.join(".gitignore");
-        let mut ignore_file = fs::File::create(ignore_path).unwrap();
-        ignore_file.write_all(ignore_str.as_bytes()).unwrap();
+        let mut ignore_file = fs::File::create(ignore_path)?;
+        ignore_file.write_all(ignore_str.as_bytes())?;
 
         let lfs_str = include_str!("../../template/.gitattributes");
         let lfs_path = self.git_root_path.join(".gitattributes");
-        let mut lfs_file = fs::File::create(lfs_path).unwrap();
-        lfs_file.write_all(lfs_str.as_bytes()).unwrap();
+        let mut lfs_file = fs::File::create(lfs_path)?;
+        lfs_file.write_all(lfs_str.as_bytes())?;
+
+        Ok(())
     }
 
-    pub fn import_back(&mut self) -> Result<(), String> {
-        self.find_project_name().unwrap();
-        Self::check_bg3_data_path(&self.bg3_data_path).unwrap();
+    pub fn import_back(&mut self) -> Result<()> {
+        self.find_project_name()?;
+        Self::check_bg3_data_path(&self.bg3_data_path)?;
 
         let to: PathBuf = self.bg3_data_path.join(&self.project_name);
         let from = self.git_root_path.join(&self.project_name);
-        self.create_link(from, to).unwrap();
+        self.create_link(from, to)?;
 
         //Public
         let to = self
@@ -284,7 +301,7 @@ impl LinkManager {
             .git_root_path
             .join(PUBLIC_PATH)
             .join(&self.project_name);
-        self.create_link(from, to).unwrap();
+        self.create_link(from, to)?;
 
         //Projects
         let to = self
@@ -295,12 +312,12 @@ impl LinkManager {
             .git_root_path
             .join(PROJECTS_PATH)
             .join(&self.project_name);
-        self.create_link(from, to).unwrap();
+        self.create_link(from, to)?;
 
         //Mods
         let to = self.bg3_data_path.join(MODS_PATH).join(&self.project_name);
         let from = self.git_root_path.join(MODS_PATH).join(&self.project_name);
-        self.create_link(from, to).unwrap();
+        self.create_link(from, to)?;
 
         //Editor
         let to = self
@@ -311,13 +328,13 @@ impl LinkManager {
             .git_root_path
             .join(EDITOR_PATH)
             .join(&self.project_name);
-        self.create_link(from, to).unwrap();
+        self.create_link(from, to)?;
 
         Ok(())
     }
 
-    fn save_config(&self) {
-        let config_file_path = create_or_get_config_file();
+    fn save_config(&self) -> Result<()> {
+        let config_file_path = create_or_get_config_file()?;
         let config = Config {
             bg3_data_path: self
                 .bg3_data_path
@@ -325,47 +342,54 @@ impl LinkManager {
                 .to_string_lossy()
                 .into_owned(),
         };
-        let config_str = serde_json::to_string(&config).unwrap();
-        fs::write(config_file_path, config_str).unwrap();
+        let config_str = serde_json::to_string(&config)?;
+        fs::write(config_file_path, config_str)?;
+
+        Ok(())
     }
 
-    fn find_project_name(&mut self) -> Result<(), String> {
+    fn find_project_name(&mut self) -> Result<()> {
         let proj_path = self.git_root_path.join(PROJECTS_PATH);
 
-        let read_dir_iter = fs::read_dir(proj_path).map_err(|e| e.to_string())?;
+        let read_dir_iter = fs::read_dir(proj_path)?;
         for entry in read_dir_iter {
-            let ent: fs::DirEntry = entry.map_err(|e| e.to_string())?;
-            self.project_name = ent.file_name().into_string().unwrap();
+            let ent: fs::DirEntry = entry?;
+            self.project_name = ent
+                .file_name()
+                .to_str()
+                .ok_or(anyhow!("Convert Project File Name Failed"))?
+                .to_string();
         }
         if self.project_name.is_empty() {
-            return Err("No Project Name Found".to_string());
+            bail!("No Project Name Found")
         }
         Ok(())
     }
 
-    fn check_bg3_data_path(path: &Path) -> Result<(), String> {
+    fn check_bg3_data_path(path: &Path) -> Result<()> {
         let assets = path.join("Assets.pak");
         let gustav = path.join("Gustav.pak");
         let dice_set01 = path.join("DiceSet01.pak");
         if !gustav.exists() || !assets.exists() || !dice_set01.exists() {
-            return Err("Not A Valid BG3 Data Path".to_string());
+            bail!("Not A Valid BG3 Data Path");
         }
         Ok(())
     }
 }
 
-fn create_or_get_config_file() -> PathBuf {
-    let base_dir = directories::BaseDirs::new().unwrap();
+fn create_or_get_config_file() -> Result<PathBuf> {
+    let base_dir = directories::BaseDirs::new().ok_or(anyhow!("User Base Dir Not Found"))?;
     let config_dir = base_dir.config_dir();
     let app_config_dir = config_dir.join(APP_CONFIG_DIR);
     if !app_config_dir.exists() {
-        fs::create_dir_all(&app_config_dir).unwrap();
+        fs::create_dir_all(&app_config_dir)?;
     }
     let config_file_path = app_config_dir.join(CONFIG_FILE);
     if !config_file_path.exists() {
-        fs::File::create(&config_file_path).unwrap();
+        fs::File::create(&config_file_path)?;
     }
-    config_file_path
+
+    Ok(config_file_path)
 }
 
 fn modal<'a, Message>(
