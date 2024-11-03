@@ -10,7 +10,7 @@ use iced::{
     alignment,
     widget::{
         button, center, checkbox, column, container, mouse_area, opaque, row, scrollable, stack,
-        text, text_input,
+        text, text_editor, text_input,
     },
     window, Color, Element, Task,
 };
@@ -36,6 +36,8 @@ pub enum Message {
     ToggleCreateGit(bool),
     ImportBack,
 
+    ActionPerformed(text_editor::Action),
+
     HideErr,
 }
 
@@ -47,7 +49,10 @@ pub struct LinkManager {
 
     create_ignore: bool,
 
+    //Err message
     err_msg: String,
+    err_content: text_editor::Content,
+    is_perform: bool,
     boot_failed: bool,
 }
 
@@ -120,9 +125,19 @@ impl LinkManager {
                 }
                 Message::HideErr => {
                     self.err_msg = "".to_string();
+                    self.is_perform = false;
                     if self.boot_failed {
                         return Ok(window::get_latest().and_then(window::close));
                     }
+                }
+                Message::ActionPerformed(action) => {
+                    match action {
+                        text_editor::Action::Edit(_edit) => {}
+                        _ => {
+                            self.err_content.perform(action);
+                        }
+                    }
+                    self.is_perform = true;
                 }
             };
             Ok(Task::none())
@@ -133,6 +148,9 @@ impl LinkManager {
             .as_ref()
             .map(|_| "".to_string())
             .unwrap_or_else(|e| e.to_string());
+        if !self.err_msg.is_empty() && !self.is_perform {
+            self.err_content = text_editor::Content::with_text(&self.err_msg);
+        }
 
         res.unwrap_or(Task::none())
     }
@@ -179,13 +197,16 @@ impl LinkManager {
         ]
         .padding(20)
         .spacing(5);
-        if self.err_msg.is_empty() {
+        if self.err_msg.is_empty() && !self.is_perform {
             content.into()
         } else {
             let alert = container(
                 column![
                     text("Error").size(20).color(Color::new(1.0, 0.0, 0.0, 1.0)),
-                    scrollable(text(&self.err_msg).width(300)).height(100),
+                    text_editor(&self.err_content)
+                        .on_action(Message::ActionPerformed)
+                        .width(300)
+                        .height(100),
                     button("OK").on_press(Message::HideErr)
                 ]
                 .align_x(alignment::Horizontal::Center)
