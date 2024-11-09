@@ -108,7 +108,9 @@ impl LinkManager {
                 Message::SelectGit => {
                     if let Some(git_folder) = FileDialog::new().pick_folder() {
                         self.git_root_path = git_folder;
-                        self.find_project_name()?;
+                        if self.project_name.is_empty() {
+                            self.find_project_name()?;
+                        }
                     }
                 }
                 Message::ExportAndLink => {
@@ -158,7 +160,7 @@ impl LinkManager {
     pub fn view(&self) -> Element<Message> {
         // Elements
         let project_name_text = text("Project Name:");
-        let project_name_input = text_input("Optional For Importing", &self.project_name)
+        let project_name_input = text_input("Not Necessary For Importing", &self.project_name)
             .on_input(Message::ProjectNameInputChanged);
 
         let bg3_data_path_text = text("BG3 Data Path:");
