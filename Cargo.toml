@@ -1,6 +1,6 @@
 [package]
 name = "bg3_mod_git_manager"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Let you manage your mod project with git"
 

@@ -219,6 +219,27 @@ impl LinkManager {
         }
     }
 
+    fn remove_keep_from_non_empty_dir(dir: &PathBuf) -> Result<bool> {
+        let read_dir_iter = fs::read_dir(dir)?;
+        for entry in read_dir_iter {
+            let ent: fs::DirEntry = entry?;
+            if ent.file_type()?.is_dir() {
+                continue;
+            }
+            let name = ent
+                .file_name()
+                .to_str()
+                .ok_or(anyhow!("Convert Project File Name Failed"))?
+                .to_string();
+            if name != ".gitkeep" {
+                std::fs::remove_file(dir.join(".gitkeep"))?;
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
+
     /// Manage soft link
     pub fn export_and_create_soft_link(&self) -> Result<()> {
         //Data
@@ -226,7 +247,8 @@ impl LinkManager {
 
         let pj_in_data: PathBuf = self.bg3_data_path.join(&self.project_name);
         let to = self.git_root_path.join(&self.project_name);
-        self.move_and_link(pj_in_data, to)?;
+        self.move_and_link(&pj_in_data, &to)?;
+        Self::remove_keep_from_non_empty_dir(&to)?;
 
         //Public
         let pj_in_public = self
@@ -237,7 +259,8 @@ impl LinkManager {
             .git_root_path
             .join(PUBLIC_PATH)
             .join(&self.project_name);
-        self.move_and_link(pj_in_public, to)?;
+        self.move_and_link(&pj_in_public, &to)?;
+        Self::remove_keep_from_non_empty_dir(&to)?;
 
         //Projects
         let pj_in_projects = self
@@ -248,12 +271,14 @@ impl LinkManager {
             .git_root_path
             .join(PROJECTS_PATH)
             .join(&self.project_name);
-        self.move_and_link(pj_in_projects, to)?;
+        self.move_and_link(&pj_in_projects, &to)?;
+        Self::remove_keep_from_non_empty_dir(&to)?;
 
         //Mods
         let pj_in_mods = self.bg3_data_path.join(MODS_PATH).join(&self.project_name);
         let to = self.git_root_path.join(MODS_PATH).join(&self.project_name);
-        self.move_and_link(pj_in_mods, to)?;
+        self.move_and_link(&pj_in_mods, &to)?;
+        Self::remove_keep_from_non_empty_dir(&to)?;
 
         //Editor
         let pj_in_editor = self
@@ -264,26 +289,29 @@ impl LinkManager {
             .git_root_path
             .join(EDITOR_PATH)
             .join(&self.project_name);
-        self.move_and_link(pj_in_editor, to)?;
+        self.move_and_link(&pj_in_editor, &to)?;
+        Self::remove_keep_from_non_empty_dir(&to)?;
 
         Ok(())
     }
 
-    fn move_and_link(&self, from: PathBuf, to: PathBuf) -> Result<()> {
+    fn move_and_link(&self, from: &PathBuf, to: &PathBuf) -> Result<()> {
         let move_to = to.join("..");
         if !move_to.exists() {
             fs::create_dir_all(&move_to)?;
         };
 
         if from.is_dir() && !from.is_symlink() {
-            fs_extra::dir::move_dir(&from, &move_to, &fs_extra::dir::CopyOptions::new())?;
-            symlink_dir(&to, &from)?;
+            fs_extra::dir::move_dir(from, &move_to, &fs_extra::dir::CopyOptions::new())?;
+            symlink_dir(to, from)?;
         } else if !from.exists() && !from.is_symlink() {
-            fs::create_dir_all(&to)?;
-            symlink_dir(&to, &from)?;
+            fs::create_dir_all(to)?;
+            symlink_dir(to, from)?;
         } else {
             println!("skip exist link {}", from.display());
         }
+        let mut gitkeep = fs::File::create(to.join(".gitkeep")).unwrap();
+        gitkeep.write_all("".as_bytes())?;
         Ok(())
     }
 
@@ -293,7 +321,7 @@ impl LinkManager {
         }
 
         if to.exists() {
-            std::fs::remove_file(&to)?;
+            std::fs::remove_dir(&to)?;
             println!("importing {} already exists, overwrite it", to.display());
         }
 
